@@ -5,6 +5,8 @@ import { BrowserRouter } from "react-router-dom";
 import ReactDOM from "react-dom";
 import App from "./App";
 import "./index.css";
+import { WalletContext, WalletContextProvider }  from "./contexts/WalletContext";
+
 
 const themes = {
   dark: `${process.env.PUBLIC_URL}/dark-theme.css`,
@@ -21,12 +23,14 @@ const client = new ApolloClient({
 });
 
 ReactDOM.render(
+  <WalletContextProvider>
   <ApolloProvider client={client}>
     <ThemeSwitcherProvider themeMap={themes} defaultTheme={prevTheme || "light"}>
       <BrowserRouter>
-        <App subgraphUri={subgraphUri} />
+        <App subgraphUri={subgraphUri} WalletContext={WalletContext}/>
       </BrowserRouter>
     </ThemeSwitcherProvider>
-  </ApolloProvider>,
+  </ApolloProvider>
+  </WalletContextProvider>,
   document.getElementById("root"),
 );

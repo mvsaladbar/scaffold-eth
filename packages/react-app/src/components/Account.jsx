@@ -47,6 +47,7 @@ export default function Account({
   address,
   userSigner,
   localProvider,
+  userProvider,
   mainnetProvider,
   price,
   minimized,
@@ -55,6 +56,8 @@ export default function Account({
   logoutOfWeb3Modal,
   blockExplorer,
   isContract,
+  updateChain,
+  updateAddress
 }) {
   const { currentTheme } = useThemeSwitcher();
 
@@ -128,7 +131,16 @@ export default function Account({
           />
         </>
       ) : (
-        <></>
+        <>
+          <Address address={address} ensProvider={userProvider} />
+          <Balance address={address} provider={userProvider} />
+          <Wallet
+            address={address}
+            provider={userProvider}
+            ensProvider={userProvider}
+            color={currentTheme === "light" ? "#1890ff" : "#2caad9"}
+          />
+        </>
       )}
     </span>
   );

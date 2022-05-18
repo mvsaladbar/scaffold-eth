@@ -1,23 +1,29 @@
-import { PageHeader } from "antd";
-import React from "react";
+import { PageHeader, Tag, Button } from "antd";
+import React, {useContext} from "react";
+
+
 
 // displays a page header
 
-export default function Header({link, title, subTitle}) {
+export default function Header({link, title, connected, address, targetNetwork, killSession}) {
+
   return (
-    <a href={link} target="_blank" rel="noopener noreferrer">
       <PageHeader
         title={title}
-        subTitle={subTitle}
+        tags={connected ? <Tag color="blue">connected</Tag> : <Tag color="red">disconnected</Tag>}
         style={{ cursor: "pointer" }}
-      />
-    </a>
+        extra={[
+          <Button key="2" >{targetNetwork.name}</Button>,
+          <Button key="1" onClick={killSession} type="primary">Kill Session</Button>
+        ]}
+      > 
+      </PageHeader>
   );
 }
 
 
-Header.defaultProps = {
-  link: "https://github.com/austintgriffith/scaffold-eth",
-  title: "🏗 scaffold-eth",
-  subTitle: "forkable Ethereum dev stack focused on fast product iteration",
-}
+// Header.defaultProps = {
+//   link: "https://github.com/austintgriffith/scaffold-eth",
+//   title: "🏗 scaffold-eth",
+//   subTitle: "forkable Ethereum dev stack focused on fast product iteration",
+// }
