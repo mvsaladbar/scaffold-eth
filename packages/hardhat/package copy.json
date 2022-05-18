@@ -1,0 +1,61 @@
+{
+  "version": "1.0.0",
+  "name": "fluid-box",
+  "repository": "https://github.com/cryptotechmaker/fluid-box.git/",
+  "license": "MIT",
+  "scripts": {
+    "bootstrap": "rm -rf ./node_modules && yarn install --no-lockfile",
+    "clean": "rm -rf ./cache && rm -rf ./artifacts && rm -rf ./.openzeppelin && rm -rf ./contracts/mocks/thirdparty",
+    "compile": "yarn clean && NODE_ENV=compile hardhat compile --quiet && yarn solhint",
+    "test": "yarn clean && NODE_ENV=mainnet hardhat test",
+    "coverage": "npx hardhat coverage",
+    "contracts_size": "yarn compile && NODE_ENV=hardhat hardhat size-contracts",
+    "@comment deploy": "Deploy scripts",
+    "deploy:something": "hardhat deploy --tags Something_deploy --network",
+    "@comment verify contracts": "Verify contracts for different explorers",
+    "verify_contract": "hardhat verify --network",
+    "sourcify:verify": "hardhat sourcify --network",
+    "@formatters": "Formatters and code hints",
+    "prettier:check": "prettier --check .",
+    "prettier:fix": "prettier --write .",
+    "solhint": "solhint contracts/**/*.sol --fix",
+    "prepare": "husky install",
+    "deploy:main_contracts": "hardhat deploy --tags MainContracts_deploy --network",
+    "verify_all": "yarn hardhat run ./scripts/verify_all_contracts.js --network",
+    "merge_contracts": "sol-merger --export-plugin SPDXLicenseRemovePlugin \"./contracts/**/*.sol\" ./contracts-merged && node ./fixMergedContractsLicense.js"
+  },
+  "dependencies": {
+    "@nomiclabs/hardhat-ethers": "latest",
+    "@nomiclabs/hardhat-etherscan": "latest",
+    "@openzeppelin/contracts": "latest",
+    "@openzeppelin/contracts-upgradeable": "latest",
+    "@openzeppelin/hardhat-upgrades": "latest",
+    "@primitivefi/hardhat-dodoc": "latest",
+    "chai": "latest",
+    "copyfiles": "latest",
+    "dotenv": "latest",
+    "ethereum-waffle": "latest",
+    "ethereumjs-util": "latest",
+    "ethers": "latest",
+    "hardhat": "latest",
+    "hardhat-change-network": "latest",
+    "hardhat-contract-sizer": "latest",
+    "hardhat-dependency-compiler": "latest",
+    "hardhat-deploy": "latest",
+    "hardhat-deploy-ethers": "latest",
+    "solidity-coverage": "^0.7.20"
+  },
+  "devDependencies": {
+    "husky": "latest",
+    "lint-staged": "latest",
+    "prettier": "latest",
+    "prettier-plugin-solidity": "latest",
+    "solhint": "latest",
+    "solhint-plugin-prettier": "latest",
+    "sol-merger": "latest"
+  },
+  "lint-staged": {
+    "*.{js,json,sol,md}": "yarn prettier:fix",
+    "*.sol": "yarn solhint"
+  }
+}

@@ -1,0 +1,331 @@
+The following template is useful for strategies where reward computation consumes too much gas.
+
+
+
+
+
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "../../libraries/OperationsLib.sol";
+
+import "../../interfaces/aave/IAaveLendingPool.sol";
+import "../../interfaces/aave/IAaveIncentivesController.sol";
+
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+
+// We need to keep the cost as low as possible; no need for any checks
+contract AaveInvestor {
+    using SafeERC20 for IERC20;
+    address public strategy;
+
+    constructor() {
+        strategy = msg.sender;
+    }
+
+    function add(
+        uint256 amount,
+        IAaveLendingPool pool,
+        address asset
+    ) external {
+        // solhint-disable-next-line  reason-string
+        require(msg.sender == strategy);
+        OperationsLib.safeApprove(asset, address(pool), amount);
+        pool.deposit(asset, amount, address(this), 0);
+    }
+
+    function remove(
+        uint256 shares,
+        IAaveLendingPool pool,
+        address asset,
+        address recipient
+    ) external {
+        // solhint-disable-next-line  reason-string
+        require(msg.sender == strategy);
+        pool.withdraw(asset, shares, recipient);
+    }
+
+    function claimRewards(
+        address[] memory tokens,
+        IAaveIncentivesController controller
+    ) external {
+        // solhint-disable-next-line  reason-string
+        require(msg.sender == strategy);
+        controller.claimRewards(tokens, type(uint256).max, address(this));
+    }
+
+    function transferTo(
+        address asset,
+        uint256 amount,
+        address to
+    ) external {
+        // solhint-disable-next-line  reason-string
+        require(msg.sender == strategy);
+        IERC20(asset).safeTransfer(to, amount);
+    }
+}
+
+
+
+
+
+
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "./AaveBase.sol";
+
+import "../../interfaces/core/IHoldingManager.sol";
+
+import "./draft-AaveInvestor.sol";
+
+/// @title AaveStablecoin strategy used for USDC,USDT,DAI or other stables
+/// @author Cosmin Grigore (@gcosmintech)
+contract AaveStablecoin is IStrategy, AaveBase {
+    using SafeERC20 for IERC20;
+
+    /// @notice the LP token
+    address public immutable override tokenIn;
+    /// @notice the Convex receipt token
+    address public immutable override tokenOut;
+    /// @notice reward tokens offered to users
+    address public override rewardToken;
+
+    /// @notice investors contracts
+    mapping(address => address) public investors;
+
+    /// @notice participants details
+    mapping(address => IStrategy.RecipientInfo) public override recipients;
+
+    /// @notice Aave lending pool
+    IAaveLendingPool public lendingPool;
+
+    /// @notice Aave lending pool
+    IAaveIncentivesController public incentivesController;
+
+    /// @notice total investments for the strategy
+    uint256 public totalInvestments;
+
+    /// @notice creates an AaveStablecoin strategy
+    /// @param _manager manager address
+    /// @param _lendingPool lending pool address
+    /// @param _incentivesController incentives controller address
+    /// @param _tokenIn token in address
+    /// @param _tokenOut aToken address
+    constructor(
+        address _manager,
+        address _lendingPool,
+        address _incentivesController,
+        address _tokenIn,
+        address _tokenOut
+    ) {
+        require(_manager != address(0), "3003");
+        require(_lendingPool != address(0), "3036");
+        require(
+            _incentivesController != address(0),
+            "3039"
+        );
+        manager = IManager(_manager);
+        incentivesController = IAaveIncentivesController(_incentivesController);
+        lendingPool = IAaveLendingPool(_lendingPool);
+        rewardToken = incentivesController.REWARD_TOKEN();
+        tokenIn = _tokenIn;
+        tokenOut = _tokenOut;
+    }
+
+    // -- Owner specific methods --
+    /// @notice sets the new value
+    /// @param _newAddr the new address
+    function setIncentivesController(address _newAddr)
+        external
+        onlyValidAddress(_newAddr)
+        onlyOwner
+    {
+        emit IncentivesControllerUpdated(
+            address(incentivesController),
+            _newAddr
+        );
+        incentivesController = IAaveIncentivesController(_newAddr);
+        rewardToken = incentivesController.REWARD_TOKEN();
+    }
+
+    /// @notice sets the new value
+    /// @param _newAddr the new address
+    function setLendingPool(address _newAddr)
+        external
+        onlyValidAddress(_newAddr)
+        onlyOwner
+    {
+        emit LendingPoolUpdated(address(lendingPool), _newAddr);
+        lendingPool = IAaveLendingPool(_newAddr);
+    }
+
+    /// @notice save funds
+    /// @param _token token address
+    /// @param _amount token amount
+    function emergencySave(address _token, uint256 _amount)
+        external
+        override
+        onlyValidAddress(_token)
+        onlyValidAmount(_amount)
+        onlyOwner
+    {
+        _saveFunds(_token, msg.sender, _amount);
+        emit SavedFunds(_token, _amount);
+    }
+
+    // -- View type methods --
+    /// @notice returns rewards for recipient based on existing balances
+    /// @dev for an updated value, updateRewards() needs to be called by the recipient
+    /// @param _recipient holder's address
+    /// @return amount
+    function getRewards(address _recipient)
+        external
+        view
+        override
+        onlyValidAddress(_recipient)
+        returns (uint256)
+    {
+        return
+            incentivesController.getUserUnclaimedRewards(
+                investors[msg.sender]
+            ) + IERC20(rewardToken).balanceOf(investors[msg.sender]);
+    }
+
+    // -- User specific methods --
+    /// @notice deposits funds into the strategy
+    /// @dev some strategies won't give back any receipt tokens; in this case 'tokenOutAmount' will be 0
+    /// @dev 'tokenInAmount' will be equal to '_amount' in case the '_asset' is the same as strategy 'tokenIn()'
+    /// @param _asset token to be invested
+    /// @param _amount token's amount
+    /// @param _recipient on behalf of
+    /// returns receipt tokens amount
+    /// returns tokenin() amount
+    function deposit(
+        address _asset,
+        uint256 _amount,
+        address _recipient,
+        bytes calldata
+    )
+        external
+        override
+        onlyValidAmount(_amount)
+        onlyStrategyManager
+        nonReentrant
+        returns (uint256, uint256)
+    {
+        require(_asset == tokenIn, "3001");
+
+        if (investors[_recipient] == address(0)) {
+            investors[_recipient] = address(new AaveInvestor());
+        }
+
+        IERC20(_asset).safeTransferFrom(
+            _recipient,
+            investors[_recipient],
+            _amount
+        );
+
+        uint256 balanceBefore = IERC20(tokenOut).balanceOf(
+            investors[_recipient]
+        );
+        AaveInvestor(investors[_recipient]).add(_amount, lendingPool, _asset);
+        uint256 balanceAfter = IERC20(tokenOut).balanceOf(
+            investors[_recipient]
+        );
+
+        totalInvestments += _amount;
+
+        emit Deposit(_asset, _amount, _recipient);
+        return (balanceAfter - balanceBefore, _amount);
+    }
+
+    /// @notice withdraws deposited funds
+    /// @dev some strategies will allow only the tokenIn to be withdrawn
+    /// @dev 'assetAmount' will be equal to 'tokenInAmount' in case the '_asset' is the same as strategy 'tokenIn()'
+    /// @param _asset token to be invested
+    /// @param _shares amount to withdraw
+    /// @param _recipient on behalf of
+    /// @param _asset token to be withdrawn
+    /// returns asset amoumt obtained from the operation
+    /// returns token in amount
+    function withdraw(
+        uint256 _shares,
+        address _recipient,
+        address _asset,
+        bytes calldata
+    )
+        external
+        override
+        onlyStrategyManager
+        onlyValidAmount(_shares)
+        nonReentrant
+        returns (uint256, uint256)
+    {
+        require(_asset == tokenIn, "3001");
+
+        uint256 balanceBefore = IERC20(tokenIn).balanceOf(
+            manager.strategyManager()
+        );
+        AaveInvestor(investors[_recipient]).remove(
+            _shares,
+            lendingPool,
+            _asset,
+            manager.strategyManager()
+        );
+        uint256 balanceAfter = IERC20(tokenIn).balanceOf(
+            manager.strategyManager()
+        );
+        uint256 assetAmount = balanceAfter - balanceBefore;
+
+        totalInvestments = assetAmount > totalInvestments
+            ? 0
+            : totalInvestments - assetAmount;
+
+        emit Withdraw(_asset, _recipient, _shares);
+
+        return (assetAmount, assetAmount);
+    }
+
+    /// @notice claims rewards from the strategy
+    /// @dev for updated rewards user has to call 'updateRewards'; otherwise only available funds are withdrawn
+    /// @param _recipient on behalf of
+    function claimRewards(address _recipient)
+        external
+        override
+        onlyStrategyManager
+        onlyValidAddress(_recipient)
+        nonReentrant
+        returns (uint256)
+    {
+        address[] memory tokens = new address[](1);
+        tokens[0] = tokenOut;
+        AaveInvestor(investors[_recipient]).claimRewards(
+            tokens,
+            incentivesController
+        );
+
+        uint256 amount = IERC20(rewardToken).balanceOf(investors[_recipient]);
+        AaveInvestor(investors[_recipient]).transferTo(
+            rewardToken,
+            amount,
+            manager.strategyManager()
+        );
+
+        emit Rewards(_recipient, amount);
+
+        return amount;
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+

@@ -42,6 +42,12 @@
     "send": "hardhat send",
     "generate": "hardhat generate",
     "account": "hardhat account",
-    "verify": "hardhat verify"
+    "verify": "hardhat verify",
+    "verify_contract": "hardhat verify --network",
+    "deploy:main_contracts": "hardhat deploy --tags MainContracts_deploy --network",
+    "verify_all": "yarn hardhat run ./scripts/verify_all_contracts.js --network",
+    "merge_contracts": "sol-merger --export-plugin SPDXLicenseRemovePlugin \"./contracts/**/*.sol\" ./contracts-merged && node ./fixMergedContractsLicense.js"
+
+
   }
 }

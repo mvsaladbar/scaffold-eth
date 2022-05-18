@@ -80,8 +80,9 @@ function App(props) {
 
   const [injectedProvider, setInjectedProvider] = useState();
   const [address, setAddress] = useState();
-  const [selectedNetwork, setSelectedNetwork] = useState(networkOptions[0]);
   const location = useLocation();
+
+  const [selectedNetwork, setSelectedNetwork] = useState(networkOptions[0]);
 
   const targetNetwork = NETWORKS[selectedNetwork];
 

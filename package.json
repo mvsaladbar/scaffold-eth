@@ -52,7 +52,11 @@
     "deploy-and-graph": "yarn deploy && yarn graph-ship-local",
     "theme": "yarn workspace @scaffold-eth/react-app theme",
     "watch-theme": "yarn workspace @scaffold-eth/react-app watch",
-    "postinstall": "husky install"
+    "postinstall": "husky install",
+    "verify_contract": "hardhat verify --network",
+    "deploy:main_contracts": "yarn workspace @scaffold-eth/hardhat deploy --tags MainContracts_deploy --network",
+    "verify_all": "yarn hardhat run ./scripts/verify_all_contracts.js --network",
+    "merge_contracts": "sol-merger --export-plugin SPDXLicenseRemovePlugin \"./contracts/**/*.sol\" ./contracts-merged && node ./fixMergedContractsLicense.js"
   },
   "workspaces": {
     "packages": [

@@ -1,9 +1,18 @@
 // import {SyncOutlined } from "@ant-design/icons";
 // import { utils } from "ethers";
-import {Popconfirm, Card, DatePicker, Divider, Input, Button, Image } from "antd";
+import {Popconfirm, Card, DatePicker, Divider, Input, Button, Image, Col, Row} from "antd";
 import React, { useEffect, useState, useContext } from "react";
 // import { Address, Balance, Events } from "../components";
 import { getCachedSession } from "./helpers/utilities";
+import {
+  useBalance,
+  useContractLoader,
+  useContractReader,
+  useGasPrice,
+  useOnBlock,
+  useUserProviderAndSigner,
+} from "eth-hooks";
+import { useExchangeEthPrice } from "eth-hooks/dapps/dex";
 import { getWalletController } from "./controllers/WalletController";
 import walletconnectLogo from "./walletconnect-logo.png"
 import { NETWORKS, ETH_STANDARD_PATH, DEFAULT_CHAIN_ID, DEFAULT_ACTIVE_INDEX, ALCHEMY_KEY } from "./constants";
@@ -15,9 +24,11 @@ import { getRpcEngine } from "./engines";
 import { WalletContext } from './contexts/WalletContext';
 import { getAppConfig } from "./config";
 import { getAppControllers } from "./controllers";
-import { Header } from "./components";
+import { Header, Faucet, GasGauge, Ramp } from "./components";
 import { PeerMeta } from "./components/PeerMeta";
 import { Web3ModalSetup } from "./helpers";
+import { useStaticJsonRPC } from "./hooks";
+
 
 
 
@@ -63,6 +74,7 @@ const NETWORKCHECK = true;
 const USE_NETWORK_SELECTOR = false;
 
 
+
 const web3Modal = Web3ModalSetup();
 
 // 🛰 providers
@@ -73,7 +85,12 @@ const providers = [
 ];
 
 
+
+
+
 export default function App() {
+
+  
 
   // const [state, setState] = useState({
   //   uri: '',
@@ -122,6 +139,7 @@ export default function App() {
   const [connectorEvent, setConnectorEvent] = useState(false);
   const [appConfig, setAppConfig] = useState(getAppConfig());
 
+
   // readContracts
   // writeContracts
   // price
@@ -137,6 +155,15 @@ export default function App() {
 
   const targetNetwork = NETWORKS[selectedNetwork];
 
+  const localProvider = getAppControllers().wallet.provider();
+
+  const yourLocalBalance = useBalance(localProvider, address);
+
+  const mainnetProvider = useStaticJsonRPC(providers);
+  const price = useExchangeEthPrice(targetNetwork, mainnetProvider);
+  const gasPrice = useGasPrice(targetNetwork, "fast");
+  
+  const faucetAvailable = localProvider && localProvider.connection && targetNetwork.name.indexOf("local") !== -1;
 
 
   async function subscribeToEvents() {
@@ -561,6 +588,45 @@ export default function App() {
             )}
         </Card>
         <Divider />
+      </div>
+      {/* 🗺 Extra UI like gas price, eth price, faucet, and support: */}
+      <div style={{ position: "fixed", textAlign: "left", left: 0, bottom: 20, padding: 10 }}>
+        <Row align="middle" gutter={[4, 4]}>
+          <Col span={8}>
+            <Ramp price={price} address={address} networks={NETWORKS} />
+          </Col>
+
+          <Col span={8} style={{ textAlign: "center", opacity: 0.8 }}>
+            <GasGauge gasPrice={gasPrice} />
+          </Col>
+          <Col span={8} style={{ textAlign: "center", opacity: 1 }}>
+            <Button
+              onClick={() => {
+                window.open("https://t.me/joinchat/KByvmRe5wkR-8F_zz6AjpA");
+              }}
+              size="large"
+              shape="round"
+            >
+              <span style={{ marginRight: 8 }} role="img" aria-label="support">
+                💬
+              </span>
+              Support
+            </Button>
+          </Col>
+        </Row>
+
+        <Row align="middle" gutter={[4, 4]}>
+          <Col span={24}>
+            {
+              /*  if the local provider has a signer, let's show the faucet:  */
+              faucetAvailable ? (
+                <Faucet localProvider={localProvider} price={price} ensProvider={mainnetProvider} />
+              ) : (
+                ""
+              )
+            }
+          </Col>
+        </Row>
       </div>
     </div>
   );
